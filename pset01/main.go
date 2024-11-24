@@ -281,8 +281,8 @@ func Verify(msg Message, pub PublicKey, sig Signature) bool {
 	// ===
 	for i := 0; i < 256; i++ {
 		byteIndex := i / 8
-		bitIndex := uint(i % 8)
-		bit := (msg[byteIndex] >> bitIndex) & 1
+		bitIndex := (7 - (i % 8))
+		bit := msg[byteIndex] >> bitIndex & 0x01
 		// fmt.Printf("msg[%d]: %08b, bit %d: %d\n", byteIndex, msg[byteIndex], bitIndex, bit)
 		if bit == 0 {
 			if !sig.Preimage[i].IsPreimage(pub.ZeroHash[i]) {

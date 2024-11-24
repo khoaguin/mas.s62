@@ -21,6 +21,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -30,11 +31,11 @@ func main() {
 
 	// Define your message
 	textString := "1"
-	fmt.Printf("%s\n", textString)
+	fmt.Printf("Text string: %s\n", textString)
 
 	// convert message into a block
 	m := GetMessageFromString(textString)
-	fmt.Printf("%x\n", m[:])
+	fmt.Printf("Message coverted into block: %x\n", m[:])
 
 	// generate keys
 	sec, pub, err := GenerateKey()
@@ -43,7 +44,7 @@ func main() {
 	}
 
 	// print pubkey.
-	fmt.Printf("pub:\n%s\n", pub.ToHex())
+	fmt.Printf("pub key:\n%s\n", pub.ToHex())
 
 	// sign message
 	sig1 := Sign(m, sec)
@@ -110,7 +111,7 @@ func HexToPubkey(s string) (PublicKey, error) {
 	// first, make sure hex string is of correct length
 	if len(s) != expectedLength {
 		return p, fmt.Errorf(
-			"Pubkey string %d characters, expect %d", expectedLength)
+			"Pubkey string %d characters, expect %d", len(s), expectedLength)
 	}
 
 	// decode from hex to a byte slice
@@ -188,7 +189,7 @@ func HexToSignature(s string) (Signature, error) {
 	// first, make sure hex string is of correct length
 	if len(s) != expectedLength {
 		return sig, fmt.Errorf(
-			"Pubkey string %d characters, expect %d", expectedLength)
+			"Pubkey string %d characters, expect %d", len(s), expectedLength)
 	}
 
 	// decode from hex to a byte slice
@@ -206,6 +207,7 @@ func HexToSignature(s string) (Signature, error) {
 }
 
 // GetMessageFromString returns a Message which is the hash of the given string.
+// The output of sha256.Sum256 is a 32-byte (or 256 bit) array ([32]byte)
 func GetMessageFromString(s string) Message {
 	return sha256.Sum256([]byte(s))
 }
@@ -223,6 +225,25 @@ func GenerateKey() (SecretKey, PublicKey, error) {
 	// Your code here
 	// ===
 
+	// Fill sec.ZeroPre and sec.OnePre with random bytes
+	for i := 0; i < 256; i++ {
+		_, err := rand.Read(sec.ZeroPre[i][:])
+		if err != nil {
+			return sec, pub, err
+		}
+		_, err = rand.Read(sec.OnePre[i][:])
+		if err != nil {
+			return sec, pub, err
+		}
+	}
+
+	// Hash each block in sec.ZeroPre and sec.OnePre
+	// and store the result in pub.ZeroHash and pub.OneHash
+	for i := 0; i < 256; i++ {
+		pub.ZeroHash[i] = sec.ZeroPre[i].Hash()
+		pub.OneHash[i] = sec.OnePre[i].Hash()
+	}
+
 	// ===
 	return sec, pub, nil
 }
@@ -233,7 +254,21 @@ func Sign(msg Message, sec SecretKey) Signature {
 
 	// Your code here
 	// ===
-
+	// fmt.Printf("msg: %x\n", msg[:])
+	// loop through bits of the message
+	for i := 0; i < 256; i++ {
+		byteIndex := i / 8
+		bitIndex := uint(i % 8)
+		bit := (msg[byteIndex] >> bitIndex) & 1
+		// fmt.Printf("msg[%d]: %08b, bit %d: %d\n", byteIndex, msg[byteIndex], bitIndex, bit)
+		if bit == 0 {
+			sig.Preimage[i] = sec.ZeroPre[i]
+		} else {
+			sig.Preimage[i] = sec.OnePre[i]
+		}
+	}
+	// printn out the signature
+	// fmt.Printf("sig: %s\n", sig.ToHex())
 	// ===
 	return sig
 }
@@ -244,8 +279,21 @@ func Verify(msg Message, pub PublicKey, sig Signature) bool {
 
 	// Your code here
 	// ===
-
-	// ===
+	for i := 0; i < 256; i++ {
+		byteIndex := i / 8
+		bitIndex := uint(i % 8)
+		bit := (msg[byteIndex] >> bitIndex) & 1
+		// fmt.Printf("msg[%d]: %08b, bit %d: %d\n", byteIndex, msg[byteIndex], bitIndex, bit)
+		if bit == 0 {
+			if !sig.Preimage[i].IsPreimage(pub.ZeroHash[i]) {
+				return false
+			}
+		} else {
+			if !sig.Preimage[i].IsPreimage(pub.OneHash[i]) {
+				return false
+			}
+		}
+	}
 
 	return true
 }

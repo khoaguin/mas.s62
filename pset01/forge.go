@@ -1,6 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"crypto/rand"
+	"crypto/sha256"
+	"fmt"
+)
 
 /*
 A note about the provided keys and signatures:
@@ -119,16 +123,53 @@ func Forge() (string, Signature, error) {
 	fmt.Printf("ok 3: %v\n", Verify(msgslice[2], pub, sig3))
 	fmt.Printf("ok 4: %v\n", Verify(msgslice[3], pub, sig4))
 
-	msgString := "my forged message"
+	msgString := "forge khoa"
 	var sig Signature
 
 	// your code here!
 	// ==
-	// Geordi La
+	seckey, _ := randomSecKey()
+	// loop through msgslice and sigslice
+	for i := 0; i < 4; i++ {
+		forgeSecKey(msgslice[i], sigslice[i], seckey)
+	}
+	// sign the forged message
+	msgHash := sha256.Sum256([]byte(msgString))
+	sig = Sign(msgHash, seckey)
 	// ==
-
 	return msgString, sig, nil
 
+}
+
+func randomSecKey() (SecretKey, error) {
+	var seckey SecretKey
+	for i := 0; i < 256; i++ {
+		_, err := rand.Read(seckey.ZeroPre[i][:])
+		if err != nil {
+			return seckey, err
+		}
+		_, err = rand.Read(seckey.OnePre[i][:])
+		if err != nil {
+			return seckey, err
+		}
+	}
+	return seckey, nil
+}
+
+// forge a secret key from a message and a signature
+func forgeSecKey(msg Message, sig Signature, seckey SecretKey) {
+	for i := 0; i < 256; i++ {
+		byteIndex := i / 8
+		bitIndex := (7 - (i % 8))
+		bit := msg[byteIndex] >> bitIndex & 0x01
+		// fmt.Printf("msg[%d]: %08b, bit %d: %d\n: ", byteIndex, msg[byteIndex], bitIndex, bit)
+		// fmt.Printf("sig[%d]: %08b\n", i, sig.Preimage[i])
+		if bit == 0 {
+			seckey.ZeroPre[i] = sig.Preimage[i]
+		} else {
+			seckey.OnePre[i] = sig.Preimage[i]
+		}
+	}
 }
 
 // hint:
